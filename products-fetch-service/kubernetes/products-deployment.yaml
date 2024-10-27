@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: products-api
+  namespace: nodejs-micro
+spec:
+  selector:
+    app: products-api
+  ports:
+    - port: 3002              
+      targetPort: 3002
+      nodePort: 31992
+  type: NodePort                
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: products-api
+  namespace: nodejs-micro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: products-api
+  template:
+    metadata:
+      labels:
+        app: products-api
+    spec:
+      containers:
+      - name: products-api 
+        image: theodor567/fetch-prod-microservice
+        env:
+          - name: MONGO_CONN_STR_PRODUCTS
+            value: mongodb://mongo-0.mongo:27017,mongo-1.mongo:27017,mongo-2.mongo:27017/products?replicaSet=rs0
+          - name: MONGO_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: username
+          - name: MONGO_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: password
+        ports:
+          - containerPort: 3002

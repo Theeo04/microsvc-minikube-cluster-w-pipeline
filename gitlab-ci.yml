@@ -1,0 +1,119 @@
+variables:
+  FRONTEND_IMAGE: "frontend-microservice"
+  PRODUCTS_IMAGE: "fetch-prod-microservice"
+  USER_MANAGEMENT_IMAGE: "user-microservice"
+
+stages:
+  - build
+  - push
+  - deploy
+
+# Build Template
+.build_template: &build_template
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building Docker Image for $DOCKER_IMAGE"
+    - docker build -t $DOCKER_IMAGE .
+    - docker save -o $DOCKER_IMAGE.tar $DOCKER_IMAGE
+  artifacts:
+    paths:
+      - $DOCKER_IMAGE.tar
+
+# Push Template
+.push_template: &push_template
+  stage: push
+  image: docker:latest
+  services:
+    - docker:dind
+  dependencies:
+    - build
+  script:
+    - echo "Login to Docker Hub"
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - echo "Loading Docker Image"
+    - docker load -i $DOCKER_IMAGE.tar
+    - echo "Tagging Docker Image"
+    - docker tag $DOCKER_IMAGE $DOCKER_USERNAME/$DOCKER_IMAGE
+    - echo "Pushing Docker Image"
+    - docker push $DOCKER_USERNAME/$DOCKER_IMAGE
+
+# Deploy Template
+.deploy_template: &deploy_template
+  stage: deploy
+  script:
+    - echo "Deploy to Kubernetes Cluster"
+    - kubectl set image deployment/$DEPLOYMENT_NAME $CONTAINER_NAME=$DOCKER_USERNAME/$DOCKER_IMAGE
+  tags:
+    - master-runner
+
+# Frontend Service Jobs
+frontend_build:
+  <<: *build_template
+  variables:
+    DOCKER_IMAGE: $FRONTEND_IMAGE
+  only:
+    - frontend-branch
+
+frontend_push:
+  <<: *push_template
+  variables:
+    DOCKER_IMAGE: $FRONTEND_IMAGE
+  only:
+    - frontend-branch
+
+frontend_deploy:
+  <<: *deploy_template
+  variables:
+    DEPLOYMENT_NAME: "users-admin-deployment"
+    CONTAINER_NAME: "users-admin"
+  only:
+    - frontend-branch
+
+# Products API Jobs
+products_build:
+  <<: *build_template
+  variables:
+    DOCKER_IMAGE: $PRODUCTS_IMAGE
+  only:
+    - products-fetch-api
+
+products_push:
+  <<: *push_template
+  variables:
+    DOCKER_IMAGE: $PRODUCTS_IMAGE
+  only:
+    - products-fetch-api
+
+products_deploy:
+  <<: *deploy_template
+  variables:
+    DEPLOYMENT_NAME: "products-api"
+    CONTAINER_NAME: "products-api"
+  only:
+    - products-fetch-api
+
+# User Management API Jobs
+users_build:
+  <<: *build_template
+  variables:
+    DOCKER_IMAGE: $USER_MANAGEMENT_IMAGE
+  only:
+    - user-service-api
+
+users_push:
+  <<: *push_template
+  variables:
+    DOCKER_IMAGE: $USER_MANAGEMENT_IMAGE
+  only:
+    - products-fetch-api
+
+users_deploy:
+  <<: *deploy_template
+  variables:
+    DEPLOYMENT_NAME: "users-api"
+    CONTAINER_NAME: "users-api"
+  only:
+    - products-fetch-api

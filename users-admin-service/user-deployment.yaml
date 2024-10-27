@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+  namespace: nodejs-micro
+data:
+  username: YWRtaW4=          # 'admin'
+  password: cGFzc3dvcmQ=      # 'password'
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-api
+  namespace: nodejs-micro
+spec:
+  selector:
+    app: users-api
+  ports:
+    - port: 3001              
+      targetPort: 3001
+      nodePort: 31864    
+  type: NodePort                
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-api
+  namespace: nodejs-micro
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-api
+  template:
+    metadata:
+      labels:
+        app: users-api
+    spec:
+      containers:
+      - name: users-api 
+        image: theodor567/user-microservice
+        env:
+          - name: MONGO_CONN_STR
+            value: mongodb://mongo-0.mongo:27017,mongo-1.mongo:27017,mongo-2.mongo:27017/users?replicaSet=rs0
+          - name: MONGO_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: username
+          - name: MONGO_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mongodb-secret
+                key: password
+        ports:
+          - containerPort: 3001
